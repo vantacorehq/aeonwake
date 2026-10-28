@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aeonwake: be the god of a rising civilization</title>
+<meta name="description" content="Lead one people to the stars before a rival god does. A living-world god game that runs in your browser.">
+<style>
+:root{--bg:#000;--panel:#070709;--line:#1d1d24;--text:#e8e8ec;--muted:#7c7c86;--ember:#ff4d2e;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}
+#app{display:grid;grid-template-columns:1fr 330px;grid-template-rows:1fr auto;height:100%}
+#stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:0;min-width:0;padding:12px}
+#map{image-rendering:pixelated;border:1px solid var(--line);cursor:crosshair;touch-action:none;background:#000}
+#hint{position:absolute;left:18px;bottom:16px;padding:2px 8px;background:#000c;color:var(--muted);font-size:12px;pointer-events:none}
+aside{display:flex;flex-direction:column;min-height:0;background:var(--panel);border-left:1px solid var(--line)}
+header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+#year{font:700 26px/1.1 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.02em}
+#sub{color:var(--muted);font-size:12px;margin:2px 0 10px}
+.row{display:grid;grid-template-columns:70px 1fr 44px;gap:8px;align-items:center;margin:5px 0;font-size:12px}
+.row span{color:var(--muted)}.row b{text-align:right;font-weight:600}
+.bar{height:5px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--text)}
+#faithbar{background:var(--ember)}.rival .bar i{background:var(--muted)}
+#tribes{padding:6px 16px;border-bottom:1px solid var(--line);max-height:38%;overflow:auto}
+.tr{display:grid;grid-template-columns:10px 1fr auto;gap:2px 8px;align-items:center;padding:5px 0}
+.tr i{width:10px;height:10px;border-radius:50%}.tr b{font-weight:600}.tr span{color:var(--muted);font-size:12px}
+.tr .me{color:var(--ember);font-weight:700;margin-left:6px;font-size:11px;letter-spacing:.08em}
+.tr .g{grid-column:2/4;display:flex;gap:3px}.g u{height:3px;background:var(--line);flex:1;position:relative;text-decoration:none}
+.g u::after{content:"";position:absolute;inset:0;width:var(--v);background:var(--c)}
+#log{flex:1;overflow:auto;padding:8px 16px;font-size:13px}
+#log p{margin:0 0 6px}#log time{color:var(--muted);margin-right:6px;font-size:12px}
+#bar{grid-column:1/3;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+button,input{font:inherit;color:inherit}
+button{background:#0d0d11;border:1px solid var(--line);border-radius:2px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button[aria-checked=true],button[aria-pressed=true]{border-color:var(--ember);color:var(--ember)}
+button[aria-disabled=true]{opacity:.38}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-offset:1px}
+#powers,#speeds{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#powers small{color:var(--muted);margin-left:4px}
+label{color:var(--muted);display:flex;gap:6px;align-items:center}
+#overlay{position:absolute;inset:12px;display:none;align-items:center;justify-content:center;background:radial-gradient(#000e,#000f);text-align:center;padding:16px;overflow:auto}
+#overlay.top{inset:12px 12px auto 12px;background:#000d;padding:10px;border-bottom:1px solid var(--line);display:flex;gap:14px}
+#overlay.on{display:flex}#overlay>div{max-width:520px}
+#overlay h1{margin:0 0 6px;font:800 clamp(34px,7vw,64px)/1 system-ui,sans-serif;letter-spacing:.32em;margin-right:-.32em}
+#overlay h2{margin:0 0 8px;font:800 clamp(28px,5vw,44px)/1 system-ui,sans-serif;letter-spacing:.2em}
+#overlay h2.won{color:#fff}#overlay h2.lost{color:var(--ember)}
+#overlay p{color:var(--muted);margin:6px 0 14px}
+.diffs{display:flex;gap:6px;justify-content:center;margin:14px 0 6px}
+.diffs button{padding:8px 14px}.go{background:var(--ember);color:#000;border-color:var(--ember);padding:10px 26px;font-weight:700;letter-spacing:.06em}
+.go:hover{background:#ff6a4f}.go[aria-disabled=true]{background:#2a2a30;color:var(--muted);border-color:#2a2a30}
+.stats{display:flex;gap:22px;justify-content:center;margin:12px 0}.stats b{display:block;font-size:20px;color:var(--text)}.stats span{color:var(--muted);font-size:12px}
+#seed{width:130px;background:#000;border:1px solid var(--line);border-radius:2px;padding:6px 8px}
+@media(max-width:820px){#app{grid-template-columns:1fr;grid-template-rows:auto auto auto;height:auto}#stage{height:62vw;min-height:260px}#bar{grid-column:1}aside{border-left:0;height:360px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="stage">
+    <canvas id="map" aria-label="World map"></canvas>
+    <div id="hint"></div>
+    <div id="overlay"></div>
+  </main>
+  <aside>
+    <header>
+      <div id="year">Year</div><div id="sub"></div>
+      <div class="row"><span>Faith</span><div class="bar"><i id="faithbar"></i></div><b id="faithnum"></b></div>
+      <div id="goals"></div>
+    </header>
+    <section id="tribes" aria-label="Tribes"></section>
+    <section id="log" aria-label="Chronicle"></section>
+  </aside>
+  <footer id="bar">
+    <div id="powers" role="radiogroup" aria-label="Divine powers"></div>
+    <label>Radius <input id="radius" type="range" min="1" max="9" value="4"></label>
+    <div id="speeds" role="group" aria-label="Speed"></div>
+  </footer>
+</div>
+<script type="module">
+/* ---- rng ---- */
+// Seeded randomness: the same seed always produces the same world and history.
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashSeed(s){let h=2166136261;for(const c of String(s)){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+
+/* ---- noise ---- */
+// Smooth value noise and fractal Brownian motion, driven by a seeded RNG.
+function makeNoise(rand){
+  const g=new Float32Array(65536);for(let i=0;i<g.length;i++)g[i]=rand();
+  const s=t=>t*t*(3-2*t),at=(x,y)=>g[((y&255)<<8)|(x&255)];
+  return (x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),fx=s(x-xi),fy=s(y-yi);
+    const a=at(xi,yi),b=at(xi+1,yi),c=at(xi,yi+1),d=at(xi+1,yi+1);
+    return a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy};
+}
+function fbm(n,x,y,o=5){let v=0,a=.5,f=1,t=0;for(let i=0;i<o;i++){v+=a*n(x*f+i*17.3,y*f+i*9.1);t+=a;a*=.5;f*=2}return v/t}
+
+/* ---- world ---- */
+const W=160,H=100,N=W*H;
+// f = how much food the land can carry (0 means impassable)
+const BIOMES=[
+  {name:'Deep sea',c:[5,14,30],f:0},{name:'Shallows',c:[10,32,54],f:0},
+  {name:'Beach',c:[196,180,130],f:.25},{name:'Desert',c:[206,170,100],f:.1},
+  {name:'Savanna',c:[170,160,80],f:.5},{name:'Grassland',c:[98,150,70],f:1},
+  {name:'Forest',c:[48,110,64],f:.75},{name:'Jungle',c:[26,92,56],f:.65},
+  {name:'Tundra',c:[140,150,140],f:.15},{name:'Mountain',c:[110,104,98],f:.12},
+  {name:'Ice',c:[226,236,240],f:0}];
+function generateWorld(seed){
+  const r=mulberry32(hashSeed(seed)),n1=makeNoise(r),n2=makeNoise(r),n3=makeNoise(r);
+  const biome=new Uint8Array(N),elev=new Float32Array(N),fert=new Float32Array(N);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x,u=x/W*2-1,v=y/H*2-1,d=Math.min(1,Math.hypot(u*.95,v*1.1));
+    const h=fbm(n1,x/34,y/34)*1.1-d*d*.55+.04;
+    const temp=1-Math.abs(v)*.95-Math.max(0,h-.55)*1.2;
+    const m=(fbm(n2,x/30+50,y/30)-.5)*1.8+.5;
+    let b;
+    if(h<.28)b=0;else if(h<.36)b=1;else if(h<.4)b=2;
+    else if(h>.7)b=temp<.4?10:9;
+    else if(temp<.25)b=8;
+    else if(m<.4)b=temp>.6?3:4;
+    else if(m<.52)b=5;else if(m<.6)b=6;else b=temp>.62?7:6;
+    biome[i]=b;elev[i]=Math.max(0,Math.min(1,h));
+    fert[i]=BIOMES[b].f*(.85+n3(x/6,y/6)*.3);
+  }
+  return {biome,elev,fert};
+}
+
+/* ---- civ ---- */
+const ERAS=['Foraging','Farming','Bronze Age','Iron Age','Gunpowder','Industrial','Atomic','Orbital'];
+const GENES=['aggr','curio','fert','coop'];
+const COLORS=[[226,87,76],[88,166,255],[244,196,48],[160,110,230],[64,200,150],[240,130,200],[255,150,60],[120,220,230],[190,200,90],[235,235,235],[170,100,60],[110,130,255],[220,60,130],[60,170,90]];
+const SYL=['ka','ru','mo','el','ta','shi','dor','an','vel','ur','ben','ith','sa','ko','lun','ar'];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const MAX_ALIVE=14;
+
+class Sim{
+  constructor(seed='aeonwake'){
+    this.seed=String(seed);this.world=generateWorld(this.seed);
+    this.rand=mulberry32(hashSeed(this.seed+':history'));
+    this.owner=new Int16Array(N).fill(-1);this.pop=new Float32Array(N);
+    this.rain=new Float32Array(N);this.plague=new Float32Array(N);
+    this.tribes=[];this.year=-10000;this.tick=0;this.log=[];this.colorIx=0;
+    this.say('The world begins.');this.seedTribes(5);
+  }
+  say(text){this.log.push({year:this.year,text})}
+  alive(){return this.tribes.filter(t=>t.alive)}
+  name(){const r=this.rand,n=2+(r()*2|0);let s='';for(let i=0;i<n;i++)s+=SYL[r()*SYL.length|0];return s[0].toUpperCase()+s.slice(1)}
+  newTribe(parent=null){
+    const r=this.rand;
+    const g={};for(const k of GENES)g[k]=parent?clamp(parent.g[k]+(r()-.5)*.3,.03,1):.2+r()*.6;
+    const t={id:this.tribes.length,name:this.name(),color:COLORS[this.colorIx++%COLORS.length],g,
+      tech:parent?parent.tech:0,pop:0,cells:0,alive:true,era:parent?parent.era:0,kills:0,
+      god:parent?parent.god:-1,parent:parent?parent.id:-1,born:this.year,sample:-1,seen:0};
+    this.tribes.push(t);return t;
+  }
+  seedTribes(n){
+    const r=this.rand,spots=[];
+    for(let tries=0;tries<2000&&spots.length<n;tries++){
+      const i=r()*N|0;if(this.world.fert[i]<.5)continue;
+      const x=i%W,y=i/W|0;
+      if(spots.some(s=>Math.hypot(s%W-x,(s/W|0)-y)<22))continue;
+      spots.push(i);const t=this.newTribe();this.owner[i]=t.id;this.pop[i]=20;
+      this.say(`${t.name} awakens.`);
+    }
+  }
+  step(){
+    const {owner,pop,rain,plague,tribes,world,rand:r}=this,fert=world.fert;
+    for(const t of tribes){t.pop=0;t.cells=0;t.seen=0;t.sample=-1}
+    const start=r()*N|0;
+    for(let k=0;k<N;k++){
+      const i=(start+k*7919)%N;
+      rain[i]*=.996;plague[i]*=.985;
+      const o=owner[i];if(o<0)continue;
+      const t=tribes[o];let p=pop[i];
+      const cap=Math.max(0,fert[i]+rain[i])*(40+t.tech*18)*(t.god===0?1.12:1);
+      if(cap<1)p*=.9;else p+=p*.07*(.5+t.g.fert)*(1-p/cap);
+      p*=1-plague[i];
+      if(p<.5){owner[i]=-1;pop[i]=0;continue}
+      pop[i]=p;t.pop+=p;t.cells++;
+      if(r()<1/++t.seen)t.sample=i;
+      if(p>cap*.55&&r()<.3){
+        const x=i%W,y=i/W|0,d=r()*4|0;
+        const nx=x+(d===0)-(d===1),ny=y+(d===2)-(d===3);
+        if(nx<0||ny<0||nx>=W||ny>=H)continue;
+        const j=ny*W+nx;if(fert[j]<=0)continue;
+        if(owner[j]<0){owner[j]=o;const m=pop[i]*.3;pop[j]=m;pop[i]-=m}
+        else if(owner[j]!==o)this.contact(i,j,t);
+      }
+    }
+    for(const t of tribes){
+      if(!t.alive)continue;
+      if(t.cells===0){t.alive=false;this.say(`${t.name} vanished from the world.`);continue}
+      t.tech=Math.min(8,t.tech+t.g.curio*Math.sqrt(t.pop)*.000045*(1+t.cells/120)*(t.god===0?1.15:1));
+      const e=Math.floor(t.tech);
+      if(e>t.era){t.era=e;this.say(`${t.name} entered the ${ERAS[e]}.`)}
+      if(t.cells>30&&t.sample>=0&&owner[t.sample]===t.id&&this.alive().length<MAX_ALIVE&&r()<.0035*t.cells/20)this.schism(t);
+    }
+    this.year+=10;this.tick++;
+  }
+  contact(i,j,t){
+    const {owner,pop,tribes,rand:r}=this,u=tribes[owner[j]];
+    if(r()<t.g.aggr*.45){
+      const def=this.world.biome[j]===9?1.35:1;
+      const a=pop[i]*.6*(1+t.tech*.3)*(.7+r()*.6),b=pop[j]*def*(1+u.tech*.3)*(.7+r()*.6);
+      if(a>b){owner[j]=t.id;pop[j]=(a-b)*.4+1;pop[i]*=.85;t.kills++;
+        if(t.kills%25===0)this.say(`${t.name} has conquered ${t.kills} settlements.`)}
+      else{pop[i]*=.8;pop[j]*=.92}
+    }else if(u.tech>t.tech&&r()<.3)t.tech+=(u.tech-t.tech)*.01*(.3+t.g.coop);
+  }
+  schism(t){
+    const s=t.sample,x=s%W,y=s/W|0,cells=[];
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+      if(Math.abs(dx)+Math.abs(dy)>4)continue;
+      const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=W||ny>=H)continue;
+      const j=ny*W+nx;if(this.owner[j]===t.id)cells.push(j);
+    }
+    if(cells.length<10)return;
+    const nt=this.newTribe(t);for(const j of cells)this.owner[j]=nt.id;
+    this.say(`${nt.name} split from ${t.name}.`);
+  }
+  // Divine powers. kind: rain | drought | plague | gift | smite | spark
+  apply(kind,cx,cy,rad){
+    const {owner,pop}=this,touched=new Set();let hit=0;
+    for(let y=Math.max(0,cy-rad);y<=Math.min(H-1,cy+rad);y++)for(let x=Math.max(0,cx-rad);x<=Math.min(W-1,cx+rad);x++){
+      if((x-cx)**2+(y-cy)**2>rad*rad)continue;const i=y*W+x;
+      if(kind==='rain')this.rain[i]=Math.min(1,this.rain[i]+.5);
+      else if(kind==='drought')this.rain[i]=Math.max(-.9,this.rain[i]-.6);
+      else if(kind==='plague')this.plague[i]=Math.min(.12,this.plague[i]+.08);
+      else if(owner[i]>=0&&kind==='gift')touched.add(owner[i]);
+      else if(owner[i]>=0&&kind==='smite'){hit++;owner[i]=-1;pop[i]=0}
+    }
+    if(kind==='gift')for(const id of touched){const t=this.tribes[id];t.tech=Math.min(8,t.tech+.25);this.say(`${t.name} received a gift of knowledge.`)}
+    if(kind==='smite'&&hit)this.say(`${hit} settlements were struck down.`);
+    if(kind==='plague')this.say('A plague spreads across the land.');
+    if(kind==='spark'){const i=cy*W+cx;
+      if(this.world.fert[i]>0&&owner[i]<0&&this.alive().length<MAX_ALIVE){
+        const t=this.newTribe();owner[i]=t.id;pop[i]=20;this.say(`${t.name} was sparked into being.`)}}
+  }
+}
+
+/* ---- game ---- */
+// Game rules on top of the simulation: Faith, rival gods, win and loss. No DOM.
+const COST={rain:8,drought:10,plague:16,gift:28,smite:22,spark:34};
+const DIFF={
+  mortal:{name:'Mortal',every:110,rad:2,faith:1.25,blurb:'Rival gods rarely interfere.'},
+  prophet:{name:'Prophet',every:60,rad:3,faith:1,blurb:'Rivals curse you and bless their own.'},
+  titan:{name:'Titan',every:34,rad:4,faith:.85,blurb:'Rivals strike often and hard. Faith is scarce.'}};
+const ASCEND=7,DOMINION=.30,LIMIT=2600;
+
+class Game{
+  constructor(sim,diff,chosenId){
+    this.sim=sim;this.diff=DIFF[diff];this.diffId=diff;this.faith=45;this.maxFaith=100;
+    this.status='play';this.reason='';this.spent=0;this.curses=0;
+    this.landCells=0;for(let i=0;i<N;i++)if(sim.world.fert[i]>0)this.landCells++;
+    for(const t of sim.tribes)t.god=t.id===chosenId?0:t.id+1;
+    this.names={};for(const t of sim.tribes)if(t.god>0)this.names[t.god]=t.name;
+    sim.say(`You chose ${sim.tribes[chosenId].name}. Lead them to the stars before another god does.`);
+  }
+  mine(){return this.sim.tribes.filter(t=>t.alive&&t.god===0)}
+  rivals(){return this.sim.tribes.filter(t=>t.alive&&t.god>0)}
+  cost(p,r){return Math.round(COST[p]*(.6+.1*r))}
+  cast(p,x,y,r){
+    const c=this.cost(p,r);if(this.status!=='play'||this.faith<c)return false;
+    this.faith-=c;this.spent+=c;const n=this.sim.tribes.length;
+    this.sim.apply(p,x,y,r);
+    if(p==='spark'&&this.sim.tribes.length>n)this.sim.tribes[n].god=0;
+    return true;
+  }
+  stats(){
+    const m=this.mine(),rv=this.rivals();
+    return {pop:m.reduce((a,t)=>a+t.pop,0),tech:Math.max(0,...m.map(t=>t.tech)),
+      land:m.reduce((a,t)=>a+t.cells,0)/this.landCells,
+      rivalTech:Math.max(0,...rv.map(t=>t.tech)),
+      rivalLead:rv.reduce((b,t)=>!b||t.tech>b.tech?t:b,null)};
+  }
+  tick(){
+    if(this.status!=='play')return;
+    const s=this.sim;s.step();const st=this.stats();
+    this.faith=Math.min(this.maxFaith,this.faith+Math.sqrt(st.pop)*.006*this.diff.faith);
+    if(s.tick%this.diff.every===0)this.rivalTurn();
+    this.check(st);
+  }
+  findCell(god){
+    const s=this.sim;
+    for(let k=0;k<120;k++){const i=s.rand()*N|0,o=s.owner[i];if(o>=0&&s.tribes[o].god===god)return i}
+    return -1;
+  }
+  rivalTurn(){
+    const s=this.sim,r=s.rand,rv=this.rivals();if(!rv.length||!this.mine().length)return;
+    const t=rv[r()*rv.length|0];
+    if(r()<.55){
+      const c=this.findCell(0);if(c<0)return;
+      const kind=r()<.5?'plague':'drought';
+      s.apply(kind,c%W,c/W|0,this.diff.rad);this.curses++;
+      s.say(`The god of ${this.names[t.god]} cursed your people with ${kind}.`);
+    }else{
+      const c=this.findCell(t.god);if(c<0)return;
+      s.apply(r()<.5?'gift':'rain',c%W,c/W|0,this.diff.rad);
+    }
+  }
+  check(st){
+    if(!this.mine().length)return this.end('lost','Your people are gone. The world forgets them.');
+    if(st.tech>=ASCEND)return this.end('won','Ascension. Your people left the world and reached the stars.');
+    if(st.land>=DOMINION)return this.end('won','Dominion. Your people hold the world.');
+    if(this.sim.tick>=LIMIT)return st.tech>=st.rivalTech?this.end('won','The age ends. Your people are the most advanced.'):this.end('lost','The age ends. Another people stands higher.');
+    if(st.rivalTech>=ASCEND)return this.end('lost',`The god of ${this.names[st.rivalLead.god]} ascended first.`);
+  }
+  end(status,why){this.status=status;this.reason=why;this.sim.say(why)}
+  score(){const s=this.stats();return Math.round(s.pop/10+s.tech*500+s.land*4000+(this.status==='won'?5000-Math.min(4000,this.sim.tick):0))}
+}
+
+/* ---- main ---- */
+const $=s=>document.querySelector(s);
+const POWERS=[['rain','Rain','Food rises around the cursor'],['drought','Drought','Starves land and the people on it'],['plague','Plague','Sickness drains population'],['gift','Gift','Teaches tribes in range new ideas'],['smite','Smite','Wipes out everything in range'],['spark','Spark','Founds a new tribe of YOUR people on free land']];
+const SPEEDS=[['Pause',0],['1x',5],['3x',14],['8x',40],['25x',120]];
+const GENEINFO=[['aggr','War','#e2574c'],['curio','Curiosity','#58a6ff'],['fert','Growth','#40c896'],['coop','Trade','#f4c430']];
+let sim,game=null,mode='title',diff='prophet',picked=-1,power='rain',radius=4,speed=2,prevSpeed=2;
+let acc=0,last=0,shownLog=0,cursor=null,down=false,lastApply=0,seed='';
+const cv=$('#map'),ctx=cv.getContext('2d');cv.width=W;cv.height=H;
+const img=ctx.createImageData(W,H),ov=$('#overlay');
+const fmtYear=y=>y<0?`${(-y).toLocaleString()} BCE`:`${y.toLocaleString()} CE`;
+const rnd=()=>Math.random().toString(36).slice(2,8);
+const best=()=>{try{return +localStorage.getItem('aeonwake.best.'+diff)||0}catch(e){return 0}};
+const saveBest=v=>{try{if(v>best())localStorage.setItem('aeonwake.best.'+diff,v)}catch(e){}};
+
+function loadWorld(s){seed=s;sim=new Sim(s);game=null;$('#log').innerHTML='';shownLog=0;history.replaceState(null,'','#'+encodeURIComponent(s))}
+
+function showTitle(){
+  mode='title';loadWorld(seed||rnd());
+  ov.className='on';
+  ov.innerHTML=`<div><h1>AEONWAKE</h1><p>Choose one people. Make them reach the stars before another god's people do.</p>
+  <div class="diffs" role="radiogroup" aria-label="Difficulty">${Object.entries(DIFF).map(([k,d])=>`<button role="radio" aria-checked="${k===diff}" data-d="${k}">${d.name}</button>`).join('')}</div>
+  <p id="blurb">${DIFF[diff].blurb}</p>
+  <p>World seed <input id="seed" value="${seed}" spellcheck="false" aria-label="World seed"> </p>
+  <button class="go" id="begin">Begin</button><p style="margin-top:18px;font-size:12px">Win by reaching the Orbital era or holding ${DOMINION*100}% of the land. You lose if your people die out or a rival ascends first.</p></div>`;
+  $('#sub').textContent='';$('#goals').innerHTML='';
+}
+function showPick(){
+  mode='pick';picked=-1;loadWorld(($('#seed')?.value||seed).trim()||rnd());setSpeed(0);for(let i=0;i<60;i++)sim.step();
+  ov.className='on top';
+  ov.innerHTML=`<span style="align-self:center;color:var(--muted)">Click a glowing tribe to choose your people.</span><button class="go" id="lead" aria-disabled="true">Lead them</button>`;
+}
+function startGame(){
+  game=new Game(sim,diff,picked);mode='play';ov.className='';ov.innerHTML='';setSpeed(prevSpeed||2);
+}
+function showOver(){
+  mode='over';const won=game.status==='won',sc=game.score(),b=best();saveBest(sc);
+  ov.className='on';
+  ov.innerHTML=`<div><h2 class="${game.status}">${won?'VICTORY':'DEFEAT'}</h2><p style="color:var(--text)">${game.reason}</p>
+  <div class="stats"><div><b>${fmtYear(sim.year)}</b><span>year</span></div><div><b>${sc.toLocaleString()}</b><span>score</span></div><div><b>${Math.max(b,sc).toLocaleString()}</b><span>best (${DIFF[diff].name})</span></div></div>
+  <button class="go" id="again">Play again</button> <button id="menu">Menu</button></div>`;
+}
+
+function draw(){
+  const d=img.data,{world,owner,pop,rain,plague,tribes}=sim;
+  for(let i=0;i<N;i++){
+    const c=BIOMES[world.biome[i]].c,sh=.8+world.elev[i]*.35,o=owner[i],k=i*4;
+    let r=c[0]*sh,g=c[1]*sh,b=c[2]*sh;
+    if(o>=0){
+      const t=tribes[o],tc=t.color,x=i%W,y=i/W|0;
+      const edge=(x>0&&owner[i-1]!==o)||(x<W-1&&owner[i+1]!==o)||(y>0&&owner[i-W]!==o)||(y<H-1&&owner[i+W]!==o);
+      let m=edge?.95:.55;const dens=.8+Math.min(.3,pop[i]/220);
+      if(mode==='pick'){m=o===picked?.9:.7}
+      r=(r*(1-m)+tc[0]*m*dens);g=(g*(1-m)+tc[1]*m*dens);b=(b*(1-m)+tc[2]*m*dens);
+      if(edge){const w=t.god===0?1:.7;r=r*w+(t.god===0?90:0);g=g*w+(t.god===0?90:0);b=b*w+(t.god===0?90:0)}
+    }
+    if(rain[i]>.1){b+=rain[i]*60;g+=rain[i]*20}else if(rain[i]<-.1){r+=-rain[i]*60;g-=-rain[i]*20}
+    if(plague[i]>.01){g+=plague[i]*700;r-=plague[i]*200}
+    d[k]=r;d[k+1]=g;d[k+2]=b;d[k+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  if(cursor&&mode==='play'){ctx.strokeStyle='#ff4d2e';ctx.lineWidth=.6;ctx.beginPath();ctx.arc(cursor.x+.5,cursor.y+.5,radius,0,6.283);ctx.stroke()}
+}
+
+const bar=(l,v,max,cls='')=>`<div class="row ${cls}"><span>${l}</span><div class="bar"><i style="width:${Math.min(100,v/max*100)}%"></i></div><b>${Math.round(Math.min(100,v/max*100))}%</b></div>`;
+function side(){
+  $('#year').textContent=fmtYear(sim.year);
+  const alive=sim.alive().sort((a,b)=>b.pop-a.pop),total=alive.reduce((s,t)=>s+t.pop,0);
+  $('#sub').textContent=`${alive.length} tribes alive, ${Math.round(total).toLocaleString()} people`;
+  if(game){
+    const st=game.stats();
+    $('#faithbar').style.width=game.faith+'%';$('#faithnum').textContent=Math.floor(game.faith);
+    $('#goals').innerHTML=bar(`Ascend (${ERAS[Math.min(7,Math.floor(st.tech))]})`,st.tech,ASCEND)+bar('Land',st.land,DOMINION)
+      +(st.rivalLead?bar(`Rival ${st.rivalLead.name}`,st.rivalTech,ASCEND,'rival'):'');
+    document.querySelectorAll('[data-p]').forEach(b=>b.setAttribute('aria-disabled',game.faith<game.cost(b.dataset.p,radius)));
+  }else{$('#faithbar').style.width='0';$('#faithnum').textContent='';$('#goals').innerHTML=''}
+  document.querySelectorAll('[data-p] small').forEach(s=>s.textContent=game?game.cost(s.parentNode.dataset.p,radius):COST[s.parentNode.dataset.p]);
+  $('#tribes').innerHTML=alive.slice(0,8).map(t=>`<div class="tr"><i style="background:rgb(${t.color})"></i><b>${t.name}${t.god===0?'<em class="me">YOURS</em>':''}</b><span>${Math.round(t.pop).toLocaleString()}</span>
+    <span style="grid-column:2">${ERAS[t.era]}</span><div class="g">${GENEINFO.map(([k,n,c])=>`<u title="${n} ${t.g[k].toFixed(2)}" style="--v:${t.g[k]*100}%;--c:${c}"></u>`).join('')}</div></div>`).join('');
+  const L=$('#log');
+  if(sim.log.length!==shownLog){
+    L.insertAdjacentHTML('afterbegin',sim.log.slice(shownLog).reverse().map(e=>`<p><time>${fmtYear(e.year)}</time>${e.text}</p>`).join(''));
+    shownLog=sim.log.length;while(L.children.length>150)L.lastChild.remove();
+  }
+}
+
+function cellAt(e){
+  const r=cv.getBoundingClientRect(),x=Math.floor((e.clientX-r.left)/r.width*W),y=Math.floor((e.clientY-r.top)/r.height*H);
+  return x>=0&&y>=0&&x<W&&y<H?{x,y}:null;
+}
+function nearestTribe(c,rad=7){
+  let bd=1e9,bo=-1;
+  for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
+    const x=c.x+dx,y=c.y+dy;if(x<0||y<0||x>=W||y>=H)continue;
+    const o=sim.owner[y*W+x];if(o>=0&&dx*dx+dy*dy<bd){bd=dx*dx+dy*dy;bo=o}
+  }
+  return bo;
+}
+function pointer(e,force){
+  cursor=cellAt(e);if(!cursor)return;
+  const i=cursor.y*W+cursor.x,o=sim.owner[i];
+  $('#hint').textContent=`${BIOMES[sim.world.biome[i]].name}${o>=0?`, ${sim.tribes[o].name}, ${Math.round(sim.pop[i])} people`:''}`;
+  if(mode==='play'&&down&&(force||performance.now()-lastApply>90)){
+    lastApply=performance.now();
+    if(!game.cast(power,cursor.x,cursor.y,radius))$('#hint').textContent='Not enough Faith';
+  }
+}
+cv.addEventListener('pointerdown',e=>{
+  down=true;cv.setPointerCapture(e.pointerId);
+  if(mode==='pick'){const c=cellAt(e);if(c){const o=nearestTribe(c);if(o>=0){picked=o;$('#lead').setAttribute('aria-disabled','false');$('#lead').textContent=`Lead ${sim.tribes[o].name}`}}}
+  else pointer(e,true);
+});
+cv.addEventListener('pointermove',e=>pointer(e,false));
+cv.addEventListener('pointerup',()=>{down=false});
+cv.addEventListener('pointerleave',()=>{cursor=null});
+
+function resize(){
+  const s=$('#stage'),k=Math.min((s.clientWidth-24)/W,(s.clientHeight-24)/H);
+  cv.style.width=Math.floor(W*k)+'px';cv.style.height=Math.floor(H*k)+'px';
+}
+function buildBar(){
+  $('#powers').innerHTML=POWERS.map(([id,n,t],i)=>`<button role="radio" aria-checked="${id===power}" data-p="${id}" title="${t} (key ${i+1})">${n}<small></small></button>`).join('');
+  $('#speeds').innerHTML=SPEEDS.map(([n],i)=>`<button aria-pressed="${i===speed}" data-s="${i}">${n}</button>`).join('');
+}
+function setPower(p){power=p;document.querySelectorAll('[data-p]').forEach(b=>b.setAttribute('aria-checked',b.dataset.p===p))}
+function setSpeed(s){speed=s;document.querySelectorAll('[data-s]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.s===s))}
+$('#powers').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(b)setPower(b.dataset.p)});
+$('#speeds').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b&&mode==='play'){setSpeed(+b.dataset.s)}});
+$('#radius').addEventListener('input',e=>{radius=+e.target.value});
+ov.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.d){diff=t.dataset.d;ov.querySelectorAll('[data-d]').forEach(b=>b.setAttribute('aria-checked',b===t));$('#blurb').textContent=DIFF[diff].blurb}
+  else if(t.id==='begin')showPick();
+  else if(t.id==='lead'&&picked>=0)startGame();
+  else if(t.id==='again'){seed=rnd();showPick()}
+  else if(t.id==='menu'){seed=rnd();showTitle()}
+});
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'&&e.target.type!=='range')return;
+  if(mode!=='play')return;
+  if(e.key>='1'&&e.key<='6')setPower(POWERS[e.key-1][0]);
+  else if(e.key===' '){e.preventDefault();if(speed){prevSpeed=speed;setSpeed(0)}else setSpeed(prevSpeed||2)}
+});
+addEventListener('resize',resize);
+
+function frame(t){
+  const dt=Math.min(.1,(t-last)/1000);last=t;
+  if(mode==='play'&&game.status==='play'){
+    acc+=dt*SPEEDS[speed][1];let n=0;
+    while(acc>=1&&n<40&&game.status==='play'){game.tick();acc--;n++}if(acc>40)acc=0;
+    if(game.status!=='play'){side();showOver()}
+  }else if(mode==='title'){acc+=dt*8;while(acc>=1){sim.step();acc--}}
+  draw();requestAnimationFrame(frame);
+}
+buildBar();setSpeed(2);seed=decodeURIComponent(location.hash.slice(1));
+showTitle();resize();setInterval(side,250);requestAnimationFrame(t=>{last=t;frame(t)});
+
+</script>
+</body>
+</html>
